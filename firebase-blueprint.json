@@ -1,0 +1,202 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated customer profile and shipping preferences in NovaShop.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Unique Firebase Auth UID of the user."
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Full display name of the user."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 150,
+          "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+          "description": "Verified email address of the user."
+        },
+        "phone": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 15,
+          "pattern": "^([0-9+\\-\\s]{9,15})?$",
+          "description": "Contact phone number."
+        },
+        "avatar": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 500,
+          "description": "Profile avatar URL."
+        },
+        "memberTier": {
+          "type": "string",
+          "enum": ["Bronze", "Silver", "Gold", "Diamond"],
+          "maxLength": 20,
+          "description": "Loyalty membership tier."
+        },
+        "novaPoints": {
+          "type": "number",
+          "description": "Accumulated NovaPoints reward balance."
+        },
+        "city": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 100,
+          "description": "Default shipping city or province."
+        },
+        "district": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 100,
+          "description": "Default shipping district."
+        },
+        "address": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 250,
+          "description": "Default street shipping address."
+        },
+        "joinedDate": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30,
+          "description": "Formatted date when the member joined."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was last updated."
+        }
+      },
+      "required": [
+        "uid",
+        "fullName",
+        "email",
+        "phone",
+        "avatar",
+        "memberTier",
+        "novaPoints",
+        "city",
+        "district",
+        "address",
+        "joinedDate",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PaymentTransaction": {
+      "title": "PaymentTransaction",
+      "description": "Real-time checkout payment verification record tracking expected vs. transferred amount for an order.",
+      "type": "object",
+      "properties": {
+        "orderId": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 40,
+          "pattern": "^[A-Z0-9_\\-]+$",
+          "description": "Order reference code (e.g. DH123456)."
+        },
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the customer who owns this order."
+        },
+        "expectedAmount": {
+          "type": "number",
+          "description": "Full order total in VND required to complete the order."
+        },
+        "transferredAmount": {
+          "type": "number",
+          "description": "Cumulative amount in VND actually transferred and recorded."
+        },
+        "shortfallAmount": {
+          "type": "number",
+          "description": "Remaining shortfall in VND (expectedAmount - transferredAmount) when underpaid."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["PENDING", "UNDERPAID", "PAID"],
+          "minLength": 4,
+          "maxLength": 20,
+          "description": "Payment verification status (PENDING, UNDERPAID, or PAID)."
+        },
+        "transactionId": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 80,
+          "pattern": "^([a-zA-Z0-9_\\-]+)?$",
+          "description": "Bank transaction reference ID."
+        },
+        "bankCode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20,
+          "pattern": "^[A-Z0-9_\\-]+$",
+          "description": "Recipient bank code (e.g. BIDV)."
+        },
+        "accountNumber": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30,
+          "pattern": "^[0-9A-Z]+$",
+          "description": "Recipient bank account number."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the payment verification session was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the payment verification record was last updated."
+        }
+      },
+      "required": [
+        "orderId",
+        "uid",
+        "expectedAmount",
+        "transferredAmount",
+        "shortfallAmount",
+        "status",
+        "transactionId",
+        "bankCode",
+        "accountNumber",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Stores private authenticated user profile data strictly accessible only by the document owner."
+    },
+    "/users/{userId}/paymentTransactions/{orderId}": {
+      "schema": {
+        "$ref": "#/entities/PaymentTransaction"
+      },
+      "description": "Stores real-time payment verification status and transferred vs. expected amount checks for a user's checkout order."
+    }
+  }
+}

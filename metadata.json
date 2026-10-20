@@ -1,0 +1,10 @@
+{
+  "name": "NovaShop - Thương Mại Điện Tử & Thanh Toán Trực Tuyến",
+  "description": "Nền tảng mua sắm trực tuyến hiện đại với danh mục sản phẩm, giỏ hàng thông minh, voucher khuyến mãi và cổng thanh toán điện tử đa kênh (VietQR, Thẻ quốc tế, Ví điện tử).",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

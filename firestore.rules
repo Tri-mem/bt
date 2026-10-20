@@ -1,0 +1,268 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Global Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidOrderId(orderId) {
+      return orderId is string && orderId.size() >= 3 && orderId.size() <= 40 && orderId.matches('^[A-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isBootstrappedVipEmail() {
+      return isSignedIn() && request.auth.token.email == 'truongminhquoctri@gmail.com';
+    }
+
+    function isParentUserOwner(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)) &&
+             get(/databases/$(database)/documents/users/$(userId)).data.uid == request.auth.uid;
+    }
+
+    // 3. Entity Validation Blueprints (Verbatim synced with firebase-blueprint.json)
+    function isValidUserProfile(data) {
+      return data.keys().hasAll([
+        'uid',
+        'fullName',
+        'email',
+        'phone',
+        'avatar',
+        'memberTier',
+        'novaPoints',
+        'city',
+        'district',
+        'address',
+        'joinedDate',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'uid',
+        'fullName',
+        'email',
+        'phone',
+        'avatar',
+        'memberTier',
+        'novaPoints',
+        'city',
+        'district',
+        'address',
+        'joinedDate',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.uid == request.auth.uid &&
+      data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 100 &&
+      data.email is string && data.email.size() >= 3 && data.email.size() <= 150 && data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$') &&
+      data.phone is string && data.phone.size() <= 15 && data.phone.matches('^([0-9+\\-\\s]{9,15})?$') &&
+      data.avatar is string && data.avatar.size() <= 500 &&
+      data.memberTier is string && data.memberTier.size() <= 20 && data.memberTier in ['Bronze', 'Silver', 'Gold', 'Diamond'] &&
+      data.novaPoints is number && data.novaPoints >= 0 && data.novaPoints <= 1000000 &&
+      data.city is string && data.city.size() <= 100 &&
+      data.district is string && data.district.size() <= 100 &&
+      data.address is string && data.address.size() <= 250 &&
+      data.joinedDate is string && data.joinedDate.size() >= 1 && data.joinedDate.size() <= 30 &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidInitialTierAndPoints(data) {
+      return (data.memberTier == 'Bronze' && data.novaPoints == 1000) ||
+             (isBootstrappedVipEmail() && data.memberTier == 'Gold' && data.novaPoints == 2450);
+    }
+
+    function isImmutableProfileCorePreserved() {
+      return incoming().uid == existing().uid &&
+             incoming().createdAt == existing().createdAt &&
+             incoming().joinedDate == existing().joinedDate &&
+             incoming().memberTier == existing().memberTier &&
+             incoming().updatedAt == request.time;
+    }
+
+    function isProfileDetailsUpdateAction() {
+      return isImmutableProfileCorePreserved() &&
+             incoming().novaPoints == existing().novaPoints &&
+             incoming().diff(existing()).affectedKeys().hasOnly([
+               'fullName',
+               'phone',
+               'email',
+               'avatar',
+               'city',
+               'district',
+               'address',
+               'updatedAt'
+             ]);
+    }
+
+    function isPointsUpdateAction() {
+      return isImmutableProfileCorePreserved() &&
+             incoming().novaPoints >= existing().novaPoints &&
+             incoming().novaPoints - existing().novaPoints <= 50000 &&
+             incoming().diff(existing()).affectedKeys().hasOnly([
+               'novaPoints',
+               'updatedAt'
+             ]);
+    }
+
+    function isValidPaymentTransaction(data, userId, orderId) {
+      return data.keys().hasAll([
+        'orderId',
+        'uid',
+        'expectedAmount',
+        'transferredAmount',
+        'shortfallAmount',
+        'status',
+        'transactionId',
+        'bankCode',
+        'accountNumber',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'orderId',
+        'uid',
+        'expectedAmount',
+        'transferredAmount',
+        'shortfallAmount',
+        'status',
+        'transactionId',
+        'bankCode',
+        'accountNumber',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.orderId is string && data.orderId.size() >= 3 && data.orderId.size() <= 40 && data.orderId.matches('^[A-Z0-9_\\-]+$') &&
+      data.orderId == orderId &&
+      data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.uid == request.auth.uid &&
+      data.uid == userId &&
+      data.expectedAmount is number && data.expectedAmount > 0 && data.expectedAmount <= 10000000000 &&
+      data.transferredAmount is number && data.transferredAmount >= 0 && data.transferredAmount <= 10000000000 &&
+      data.shortfallAmount is number && data.shortfallAmount >= 0 && data.shortfallAmount <= 10000000000 &&
+      data.status is string && data.status.size() >= 4 && data.status.size() <= 20 && data.status in ['PENDING', 'UNDERPAID', 'PAID'] &&
+      (
+        (data.status == 'PENDING' && data.transferredAmount == 0 && data.shortfallAmount == data.expectedAmount) ||
+        (data.status == 'UNDERPAID' && data.transferredAmount > 0 && data.transferredAmount < data.expectedAmount && data.shortfallAmount == data.expectedAmount - data.transferredAmount) ||
+        (data.status == 'PAID' && data.transferredAmount >= data.expectedAmount && data.shortfallAmount == 0)
+      ) &&
+      data.transactionId is string && data.transactionId.size() <= 80 && data.transactionId.matches('^([a-zA-Z0-9_\\-]+)?$') &&
+      data.bankCode is string && data.bankCode.size() >= 1 && data.bankCode.size() <= 20 && data.bankCode.matches('^[A-Z0-9_\\-]+$') &&
+      data.accountNumber is string && data.accountNumber.size() >= 1 && data.accountNumber.size() <= 30 && data.accountNumber.matches('^[0-9A-Z]+$') &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    function isImmutablePaymentCorePreserved() {
+      return existing().status != 'PAID' &&
+             incoming().orderId == existing().orderId &&
+             incoming().uid == existing().uid &&
+             incoming().expectedAmount == existing().expectedAmount &&
+             incoming().bankCode == existing().bankCode &&
+             incoming().accountNumber == existing().accountNumber &&
+             incoming().createdAt == existing().createdAt &&
+             incoming().updatedAt == request.time;
+    }
+
+    function isRecordUnderpaymentAction() {
+      return isImmutablePaymentCorePreserved() &&
+             incoming().status == 'UNDERPAID' &&
+             incoming().transferredAmount > 0 &&
+             incoming().transferredAmount < existing().expectedAmount &&
+             incoming().shortfallAmount == existing().expectedAmount - incoming().transferredAmount &&
+             incoming().diff(existing()).affectedKeys().hasOnly([
+               'transferredAmount',
+               'shortfallAmount',
+               'status',
+               'transactionId',
+               'updatedAt'
+             ]);
+    }
+
+    function isConfirmFullPaymentAction() {
+      return isImmutablePaymentCorePreserved() &&
+             incoming().status == 'PAID' &&
+             incoming().transferredAmount >= existing().expectedAmount &&
+             incoming().shortfallAmount == 0 &&
+             incoming().diff(existing()).affectedKeys().hasOnly([
+               'transferredAmount',
+               'shortfallAmount',
+               'status',
+               'transactionId',
+               'updatedAt'
+             ]);
+    }
+
+    // 4. User Profile Collection (PII Strictly Isolated to Document Owner)
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       isValidInitialTierAndPoints(incoming()) &&
+                       incoming().createdAt == request.time &&
+                       incoming().updatedAt == request.time;
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) && (
+                         isProfileDetailsUpdateAction() ||
+                         isPointsUpdateAction()
+                       );
+
+      allow delete: if false;
+
+      // 5. Payment Transactions Subcollection (Master Gate + Mathematical Amount Verification)
+      match /paymentTransactions/{orderId} {
+        allow get: if isOwner(userId) &&
+                      isValidId(userId) &&
+                      isValidOrderId(orderId) &&
+                      isParentUserOwner(userId);
+        allow list: if false;
+
+        allow create: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidOrderId(orderId) &&
+                         isValidPaymentTransaction(incoming(), userId, orderId) &&
+                         incoming().createdAt == request.time &&
+                         incoming().updatedAt == request.time &&
+                         isParentUserOwner(userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(userId) &&
+                         isValidOrderId(orderId) &&
+                         isValidPaymentTransaction(incoming(), userId, orderId) && (
+                           isRecordUnderpaymentAction() ||
+                           isConfirmFullPaymentAction()
+                         ) &&
+                         isParentUserOwner(userId);
+
+        allow delete: if false;
+      }
+    }
+  }
+}
